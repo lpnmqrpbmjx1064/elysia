@@ -1,0 +1,10 @@
+[package]
+name = "elysia-world"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# A10: world depends on core, and on nothing else in the workspace.
+[dependencies]
+elysia-core = { path = "../elysia-core" }

@@ -1,0 +1,15 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/elysia-core",
+    "crates/elysia-world",
+    "crates/elysia-content",
+    "crates/elysia-net",
+    "crates/elysia-app",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+publish = false

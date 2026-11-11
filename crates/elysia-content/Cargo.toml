@@ -1,0 +1,11 @@
+[package]
+name = "elysia-content"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# A10: content depends on core and world only — never net, never app.
+[dependencies]
+elysia-core = { path = "../elysia-core" }
+elysia-world = { path = "../elysia-world" }

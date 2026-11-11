@@ -1,0 +1,29 @@
+name: gate
+
+# D2 `both`: local checks for speed, CI as the authority that cannot be skipped.
+# D3 `builddet`: this job runs exactly what scripts/gate.sh runs, nothing more.
+#
+# Deliberately absent: any cross-architecture job. B5 rules `xarch`, but no qemu
+# step exists yet — a workflow that claimed one would be a check that cannot
+# fail, which is worse than a declared gap.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  builddet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: toolchain (matches rust-toolchain.toml)
+        run: rustup show active-toolchain
+
+      - name: gate
+        run: ./scripts/gate.sh
