@@ -1,0 +1,13 @@
+[package]
+name = "elysia-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# A10: app is the outermost layer — it may depend on all of them.
+[dependencies]
+elysia-core = { path = "../elysia-core" }
+elysia-world = { path = "../elysia-world" }
+elysia-content = { path = "../elysia-content" }
+elysia-net = { path = "../elysia-net" }

@@ -1,0 +1,10 @@
+[package]
+name = "elysia-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Deliberately empty. Layer A10: core depends on nothing, and the compiler is
+# what enforces that — see PHASE1-CHECKLIST §I1.
+[dependencies]
