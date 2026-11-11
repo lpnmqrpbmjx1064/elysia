@@ -1,0 +1,29 @@
+[Unit]
+# A1 `user`: one binary in ~/bin, run by a systemd --user unit, no root after
+# install, survives a reboot because linger is enabled for this account.
+Description=Elysia simulation server
+Documentation=file:%h/www/elysia/AGENTS.md
+
+[Service]
+Type=simple
+# The symlink IS the deployment point (E2 `manual`): the unit always starts the
+# same path, and a release is a new versioned file plus a symlink flip. Rollback
+# is the flip reversed, so nothing here has to change to undo a bad push.
+ExecStart=%h/bin/elysia 0.0.0.0:8125 20261111
+Restart=always
+RestartSec=2
+
+# D8: output goes to the user journal — `journalctl --user -u elysia`.
+# A file was tried first and the unit failed with status 209/STDOUT
+# ("Failed to set up standard output"): systemd opens an `append:` target
+# BEFORE it creates StateDirectory, so the path did not exist yet. The journal
+# has no such ordering trap and is the idiomatic target for a unit.
+StandardOutput=journal
+StandardError=journal
+
+# The target is a 1 GB board (RK3566). A runaway world should be killed, not
+# allowed to take the machine with it.
+MemoryMax=256M
+
+[Install]
+WantedBy=default.target

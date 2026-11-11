@@ -37,19 +37,29 @@ while [ $# -gt 0 ]; do
 done
 
 [ -f "$UNIT" ] || { echo "no user unit at $UNIT — install it first (A1)" >&2; exit 1; }
+# The unit lives in the repo (deploy/elysia.service) and is copied into place,
+# so a fresh clone can deploy without anyone remembering where the file went.
+REPO_UNIT=deploy/elysia.service
+if [ "$MODE" != dry ] && [ -f "$REPO_UNIT" ] && ! cmp -s "$REPO_UNIT" "$UNIT"; then
+  install -m 0644 "$REPO_UNIT" "$UNIT"
+  SAY "unit refreshed from $REPO_UNIT"
+fi
 # The unit file may be new or edited; restart without this would run the old one.
 systemctl --user daemon-reload
-ADDR=$(grep -m1 '^ExecStart=' "$UNIT" | sed -E 's/^ExecStart=\S+ ([^ ]+).*/\1/')
+ADDR=$(grep -m1 '^ExecStart=' "$UNIT" | sed -E 's/^ExecStart=\S+ ([^ ]+).*/\1/' || true)
 PORT="${ADDR##*:}"
 PROBE="http://127.0.0.1:${PORT}/health"
 
-version_of() { grep -m1 '^version' Cargo.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'; }
+version_of() { grep -m1 '^version' Cargo.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true; }
 VER=$(version_of)
 SAY() { printf '  %s\n' "$*"; }
 
 # The version the live service reports, or empty if it will not answer.
+# `|| true` on the curl: under `set -euo pipefail` a connection refused inside a
+# pipeline fails the whole assignment and kills the script — which is how a
+# healthy release once reported "did not take".
 live_version() {
-  curl -s --max-time 2 "$PROBE" 2>/dev/null \
+  { curl -s --max-time 2 "$PROBE" 2>/dev/null || true; } \
     | sed -nE 's/.*"version":"([^"]+)".*/\1/p'
 }
 
@@ -88,7 +98,7 @@ fi
 
 # ---- build ------------------------------------------------------------------
 if [ -n "$TARGET" ]; then
-  LLD=$(ls "$HOME"/.rustup/toolchains/*/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld 2>/dev/null | head -1)
+  LLD=$(ls "$HOME"/.rustup/toolchains/*/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld 2>/dev/null | head -1 || true)
   [ -n "$LLD" ] || { echo "rust-lld not found — needed for the musl cross build" >&2; exit 1; }
   BIN="target/$TARGET/release/$PKG"
   BUILD=(cargo build --release --locked -p "$PKG" --target "$TARGET"
@@ -122,11 +132,19 @@ install -m 0755 "$BIN" "$ARTIFACT"
 SAY "installed: $ARTIFACT ($(stat -c%s "$ARTIFACT") B)"
 
 CUR=$(live_version)
-[ -n "$CUR" ] && [ "$CUR" != "$VER" ] && printf '%s\n' "$CUR" >"$PREV"
-[ -n "$CUR" ] && SAY "currently live: $CUR (recorded for rollback)"
+if [ -n "$CUR" ] && [ "$CUR" != "$VER" ]; then
+  printf '%s\n' "$CUR" >"$PREV"
+  SAY "currently live: $CUR (recorded as the rollback target)"
+elif [ -n "$CUR" ]; then
+  SAY "currently live: $CUR (same version — no rollback target recorded)"
+fi
 
 # A hand-started instance holds the port and would make the unit fail to bind.
-HOLDER=$(ss -ltnp 2>/dev/null | grep ":${PORT}\b" | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
+# The trailing `|| true` matters: `ss` does not always expose the owning pid (it
+# omits users:(...) on this host), and under `pipefail` an empty match aborts the
+# whole release before the flip — a false failure that looks like a bad build.
+HOLDER=$( { ss -ltnp 2>/dev/null || true; } | grep ":${PORT}\b" \
+          | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1 || true)
 if [ -n "$HOLDER" ] && ! systemctl --user is-active --quiet elysia; then
   EXE=$(readlink -f "/proc/$HOLDER/exe" 2>/dev/null || true)
   case "$EXE" in
@@ -146,7 +164,7 @@ if ! wait_for_version "$VER"; then
   echo "  ./scripts/install.sh --rollback" >&2
   exit 2
 fi
-H=$(curl -s --max-time 2 "$PROBE")
+H=$(curl -s --max-time 2 "$PROBE" || true)
 SAY "health: $H"
 printf '%s' "$H" | grep -q '"ok":true' || { echo "health is not ok" >&2; exit 2; }
 SAY "released $VER · rollback: ./scripts/install.sh --rollback"

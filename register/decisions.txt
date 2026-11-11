@@ -1,0 +1,617 @@
+# elysia decision register — v1
+#
+# OWNERSHIP: this file belongs to the owner. Only the owner writes @ruling and
+# @rationale. The agent may write @context, @option and @agent, and may never fill
+# a ruling in, not even as a placeholder.
+#
+# FORMAT: line-oriented. Lines beginning with @ start a field; lines that do not
+# are continuation text appended to the previous field. Unknown @ tokens are
+# preserved untouched, so this file can be extended by hand.
+#
+# STATUS: this file is the source of truth. The console re-reads it on every
+# request, so hand edits appear immediately.
+
+@meta title = elysia
+@meta subtitle = decision register
+@meta owner = lpnmqrpbmjx1064
+@meta note = Rulings below are empty on purpose. Nothing here is decided until you write it.
+@endmeta
+
+# =============================================================================
+# RECORD: ALREADY SETTLED
+# Listed so they are not silently re-opened. Several were decided in this thread.
+# =============================================================================
+
+@ratified Lang = Rust
+@ratified-why Rejected C because undefined behaviour (uninitialised reads, signed overflow) can make the same source behave differently at different optimisation levels — a direct threat to determinism. Rejected Go for GC jitter in a fixed tick and randomised map iteration. Rejected Python for runtime-only error detection and A55 CPU ceiling.
+@ratified Xen = The board computes state; the browser computes pixels
+@ratified-why The RK3566 CPU and 1 GB RAM never touch rendering. Client-side canvas costs the board a few KB of JSON instead of per-frame CPU and memory.
+@ratified Det = Determinism is a mandatory engine property
+@ratified-why Chosen so replay-as-test is possible. Enforced by integer-only sim math, ordered containers, in-repo PRNG, and a cross-architecture hash comparison in CI.
+@ratified Pkg = One static aarch64 binary
+@ratified-why Measured 2026-11-11: a browser-playable networked game is 304 KB on disk and 1.9 MB RSS, zero crates. The deployable is a single file with no glibc dependency.
+@ratified Http = Hand-rolled HTTP over std, no framework
+@ratified-why Measured at +19 KB disk and +216 KB RSS over the bare Rust floor. A framework would cost more than the game.
+@endratified
+
+# =============================================================================
+# TIER A — BLOCKING. Phase 0 and 1 cannot be shaped until these are ruled.
+# =============================================================================
+
+@decision A1
+@group blocking
+@title What "clean" means
+@context This is your slot and it gates the most. It decides how the game is installed
+and supervised on the board, what account it runs as, what survives a reboot, and
+what "reset to a clean machine" means. It also decides whether deployment is a copy
+or a package manager's job.
+@option system | Installed into /usr/local with a root systemd unit. Conventional, survives reboot, but writes outside home and needs root to change anything.
+@option user | Single binary in ~/bin run by a systemd --user unit with linger enabled. No root after install, survives reboot, everything in one place, easy to delete.
+@option container | Podman/Docker image. Isolation and reproducibility, at the cost of a container runtime on a 1 GB board — a daemon, ~30-60 MB idle, and a dependency the whole design was avoiding.
+@option bare | No supervisor. Started by hand or by a shell script. Smallest surface, but nothing restarts it and nothing tells you it died.
+@agent Recommend the user-scoped unit: no root after install, one binary, one unit file, and rollback is restoring the previous file. A container contradicts the single-binary finding unless you want isolation for its own sake.
+@ruling user
+@rationale light enough to keep it to start in boot , yet easy enough to remove or 'install' , ideally either no dependency or easy to handle dependency
+@end
+
+@decision A2
+@group blocking
+@title Tick model — does the world move on its own clock?
+@context Decides whether the simulation advances when nobody is looking. This shapes
+the engine loop, the save model, and what the player experiences when they return
+after a day away.
+@option realtime | The world ticks continuously at a fixed rate whether or not anyone is connected. Rimworld-like. Requires the server to actually run a loop, and a bounded cost per hour of wall time.
+@option step | The world advances one tick per player action or command. Rogue-like. Cheapest and simplest to make deterministic, but nothing happens between commands, so a colony cannot live while you are away.
+@option hybrid | Continuous while someone is connected, paused otherwise, with an option to fast-forward on return. More code, but it is what most players of this genre actually expect.
+@option catchup | Advance on demand: when a player returns, simulate the elapsed interval in a burst before serving the first frame. Deterministic and cheap at rest, but a long absence creates a spike of work that must be bounded.
+@agent Recommend hybrid, with catchup capped. Fixed ticks counted in integers keep determinism intact; the real cost is a loop that must survive the SD card's write latency and never let wall-clock values into state.
+@ruling realtime
+@rationale try realtime first with speed 1 to 3 , i want to see how well it can perform
+@end
+
+@decision A3
+@group blocking
+@title What the player is
+@context This is the single biggest determinant of what gets built. Dwarf Fortress,
+Cave of Qud and Rimworld share a genre but give the player entirely different
+relationships to the world. It decides the interface, the failure model and the
+systems worth building first.
+@option colony | The player manages a group: assign work, build, survive. Systems are jobs, needs, stockpiles, threats. Rimworld/DF-fortress-like.
+@option character | The player is one being in a larger world: move, act, die, re-roll. Systems are the world's, not yours. Cave of Qud-like.
+@option observer | The player watches a world generate and live, nudging rather than commanding. Systems are history, factions, emergent drama. DF-legends-like.
+@option mixed | A character inside a colony — one body to command among many agents. Most expensive, most distinctive.
+@agent No recommendation: this is preference, not engineering. Everything downstream is cheaper once it is ruled.
+@ruling character
+@rationale character within the world .
+@end
+
+@decision A4
+@group blocking
+@title World representation
+@context Decides how space is stored and therefore what pathfinding, line of sight and
+map generation cost. On 1 GB with an A55, a dense grid that is too large is the
+fastest way to blow a budget.
+@option dense | One array cell per tile, fixed rectangular world. Trivial indexing, trivially serialisable, memory is size x size exactly. Cost scales with area whether or not anything is there.
+@option chunk | Dense tiles grouped into chunks, only active chunks resident. Standard game design; more code, much better scaling to large worlds, and it complicates determinism slightly because chunk load order must be fixed.
+@option graph | Places and links rather than a tile field. Very small and fast for a text game, but forbids spatial simulation like fields of view or projectile paths.
+@option hybrid | A dense local area the player inhabits, plus a coarse graph for the wider world. Two representations to keep in sync, which is a permanent source of bugs.
+@agent Recommend chunk if the world is meant to be big, dense if it is meant to be deep-but-small. The measurement to make first is memory per tile: at 8 bytes a tile, a 512x512 world is 2 MB, which is affordable; 4096x4096 is 134 MB, which is not.
+@ruling chunk
+@rationale an string of seed at the start of each 'run' , then generate the world on start , which take care the 'roough' shape , and stuff like terrain and faction , then when player actually enter into an 'tile' , it got generated .
+@end
+
+@decision A5
+@group blocking
+@title Presentation
+@context "Mostly text, maybe simple 2D" covers a wide range. This decides what the
+client draws and therefore how much of the browser you depend on.
+@option text | Pure text, terminal-styled, no graphics at all. Cheapest possible client, works on anything, and ages like the 8-bit era it is imitating.
+@option ascii | A character grid on a canvas with colour and a fixed font. Reads as retro, allows a real map, and costs almost nothing because the client draws it.
+@option tiles | 2D sprite tiles. Legible and approachable, but introduces an asset pipeline, a size budget, and the question of who makes the art.
+@option mixed | Text panel plus a small ASCII or tile minimap. The usual answer for this genre, and the most code.
+@agent Recommend ascii: it gives you a real map, costs the board nothing (P4), and defers the art-pipeline question without foreclosing it.
+@ruling ascii
+@rationale ascii first at prtotype phase , only thing about actual art after the thing is actually somewhat working . [round 2: owner confirmed ascii ; the round-1 selection was tiles , which disagreed with this rationale]
+@end
+
+@decision A6
+@group blocking
+@title Repository hosting and visibility
+@context Your own foundation list named repo, versioning and CI. Visibility decides
+whether CI minutes are free, who can ever see this, and whether history is published
+irreversibly. Licence was split out of this decision into A8, because bundling it here
+made the ruling unable to express what the owner actually said.
+@option gh-public | GitHub public. Free CI, visible to everyone, and published history is permanent.
+@option gh-private | GitHub private. Free CI minutes are limited, and it stays yours.
+@option self | Self-hosted Gitea/Forgejo. Fully owned, but you become the operator of your own CI too.
+@option local | Local git only, no remote. Simplest, and no off-machine backup of the code.
+@agent Recommend gh-private with a licence chosen later. Public visibility is effectively irreversible once history is published, and CI is not yet the constraint.
+@ruling gh-public
+@rationale Opensource all the way , maybe even AGPL3.0
+@end
+
+@decision A7
+@group blocking
+@title Single player or multi player
+@context Decides whether state has one owner or many, whether there is authentication,
+and whether the network layer is a view or a protocol. Retrofitting multiplayer is
+one of the more reliable ways to destroy a single-player design.
+@option single | One world, one player, no accounts. Simplest by a wide margin, and the POC's 1-thread model already covers it.
+@option lan-coop | A few players sharing one world over LAN, no auth beyond being on the network. Needs per-player views and concurrent input against one simulation.
+@option lan-versus | Separate worlds or a lobby. Adds session management without much simulation complexity.
+@option later | Build single-player now, but keep every decision multiplayer-compatible. Costs a little discipline, preserves the option.
+@agent Recommend later: single-player now, with the rule that all state changes arrive as ordered commands carrying a tick number. That is exactly what a deterministic replay log needs anyway, so it is close to free.
+@ruling later
+@rationale i want to 'game' to be the peak of 'OOP' , where all character is 'character' , and in theory can interact and be interact with just as the player does , that means though more player is not planned , it should be prepared .
+@end
+
+# =============================================================================
+# TIER B — SHAPING. Phase 2 and 3 design.
+# =============================================================================
+
+@decision B1
+@group shaping
+@title Save format
+@context The manifesto currently holds determinism as an engine property while the
+save format stays open. A pure seed-plus-input save is tiny but is only valid for the
+exact engine build that produced it, so an upgrade would destroy a long-lived world.
+@option snapshot | Periodic full world snapshot. Survives upgrades, self-describing, but size grows with the world and the write bursts are large.
+@option replay | Seed plus complete input log. Kilobyte saves, replay doubles as a test, but any simulation change invalidates every existing save.
+@option snapdelta | Snapshot plus the input log since it. Upgrade-tolerant like a snapshot, small like a delta. More moving parts and two formats to version.
+@option both | Snapshot format for the player, replay log kept separately for debugging. Redundant deliberately: the log cannot be loaded as a save but can reproduce one.
+@agent Recommend snapdelta for the player plus a retained replay log for diagnostics. This is the note already recorded in the manifesto.
+@ruling replay
+@rationale how about an string plus small file , or maybe just one file contain the string or sha hashes , then use compute power to recompute the world state back out . [round 2: seed plus recompute , confirmed replay ; D4 versioned already accepts that upgrading destroys old worlds]
+@end
+
+@decision B2
+@group shaping
+@title Persistence cadence and crash policy
+@context The SD card is the likeliest component to wear out or corrupt, and it fails
+quietly. This decides write volume, what a power cut costs, and whether the card is a
+consumable you rotate.
+@option periodic | Autosave every N ticks to a temp file and rename. Bounded write rate, loses at most N ticks on a crash, and rename-over is atomic.
+@option on-change | Write every state change as a journal entry. Near-zero loss, but write volume tracks gameplay and can be very high.
+@option on-exit | Save only when the player leaves or the service stops. Almost no wear, and a power cut loses the session.
+@option manual | The player chooses when to save. Honest to the genre, hostile to a modern player.
+@agent Recommend periodic with an atomic rename and a measured interval. The number to ratify is bytes written per simulated day, measured on the real A1 card, not guessed.
+@ruling periodic
+@rationale auto save in-game , plus the ability to do manual save for the player . [round 2: resolved to periodic , meaning autosave on an interval plus a manual save button]
+@end
+
+@decision B3
+@group shaping
+@title Target scale — the budget driver
+@context Every budget in the manifesto is a function of this. Picking a scale that is
+too large is the failure mode the whole "manufactured constraint" principle exists to
+prevent, and it is easy to pick one that sounds modest and is not.
+@option small | A single settlement: tens of agents, thousands of items, a bounded map, one continuous run of hours.
+@option medium | Hundreds of agents, tens of thousands of items, a region, runs lasting days.
+@option large | Thousands of agents, a persistent world with history generation, runs lasting months.
+@agent Recommend writing this as four concrete numbers — map cells, live agents, live items, uninterrupted run length — because a target expressed in adjectives cannot be measured against. The POC budget suggests all three tiers are affordable in RAM; CPU per tick is the real limit.
+@ruling small
+@rationale demo phase , a town is enough . the intent is to build the tooling first , prove everything work , then try to scale up much , much later
+@end
+
+@decision B4
+@group shaping
+@title Content data format
+@context Manifesto P5 says content is data and the core is an interpreter. This
+decides what you will actually be editing when you add a creature, an item or a rule,
+and whether content lives inside the binary or beside it.
+@option line | A custom line-oriented format, parsed by hand. Zero dependencies, human-editable, and completely under your control. No tooling, no schema checker.
+@option toml | TOML stands for Tom's Obvious Minimal Language — a config format readable by humans, widely understood and easy to diff in review. Needs a parser, so either a crate or hand-written.
+@option json | Widely supported and easy to emit, but verbose and hostile to hand editing, and no comments.
+@option embedded | Content compiled into the binary with include_str!, so the deployable stays one file and content cannot drift out of sync.
+@agent Recommend the custom line format, embedded at build time. It keeps the crate count at zero, it is the only option where the parser is small enough to trust, and it is the same choice already made for this register.
+@ruling toml
+@rationale toml for now , probably external tools with nice gui much later , not the point for now
+@end
+
+@decision B5
+@group shaping
+@title How hard to hold determinism
+@context Determinism is ratified as a property, but how it is proven and for how long
+is not. This decides CI cost and what happens when a test fails years later.
+@option arch | Assert hash equality in-process only. Cheap, catches most regressions, and would not catch an architecture-specific divergence.
+@option xarch | Assert equality across x86 and aarch64 under qemu on every build. Catches the failure mode that motivated the choice, at the cost of a qemu step in CI.
+@option fixtures | Keep recorded replay fixtures and re-assert them for every historical version. Strongest, and the fixture set grows without limit.
+@option all | All of the above, with fixtures pruned to a rolling window.
+@agent Recommend xarch plus a small rolling fixture set. Cross-architecture equality is the test that earns its keep; unlimited fixtures become a maintenance burden nobody reads.
+@ruling xarch
+@rationale this is not final , as this need to be test out live during version rolling
+@end
+
+@decision B6
+@group shaping
+@title Real-time channel
+@context Pong used polling because it has no handshake, no framing protocol and no
+crypto, and it was measured at 666 req/s on one thread with zero memory growth. That
+was a proof of concept, not a ruling for a game with a moving world.
+@option poll | The client asks for state at an interval. Simplest, no framing, works everywhere, and short-lived connections never wedge. Latency floor equals the interval and cost scales with clients times frequency.
+@option sse | Server-Sent Events: one long-lived text stream from server to client, with player input posted separately. No handshake crypto, native in every browser, one connection per client, and the server must handle many open sockets at once.
+@option ws | WebSocket. Bidirectional over one socket, the industry answer, and it costs a SHA-1 handshake plus a framing protocol — the first real dependency or the first hand-written crypto in the project.
+@agent No strong recommendation yet: measure sse against poll first. Polling already works; the question is whether a moving world makes the interval visible, and that is a player-experience question, not a throughput one.
+@ruling ws
+@rationale again not final , need actual testing
+@end
+
+@decision B7
+@group shaping
+@title Client rendering technology
+@context All of these draw on the player's machine, so none costs the board anything.
+It decides what the client code looks like and what you can do with it later.
+@option canvas2d | A 2D canvas. Direct control of pixels, trivial to scale with CSS, and the Pong client already proves it.
+@option dom | HTML elements for everything. Free accessibility and text selection, poor fit for a tile map with many cells.
+@option webgl | WebGL. Enormous headroom, and a large amount of scaffolding for a text game that does not need it.
+@agent Recommend canvas2d, which is already proven in this project, with DOM overlays for text panels and controls.
+@ruling canvas2d
+@rationale should be good
+@end
+
+# =============================================================================
+# TIER C — CONTENT. The game's identity. Your call entirely.
+# =============================================================================
+
+@decision C1
+@group content
+@title Setting and genre
+@context The reference games are fantasy, post-apocalyptic science-fantasy, and
+sci-fi frontier respectively. The setting decides the vocabulary of every system.
+@option fantasy | Familiar, deep existing vocabulary, and the easiest to invent for.
+@option historical | Real constraints make mechanics feel earned, and no magic means fewer special cases.
+@option scifi | Justifies any mechanic you want, and risks becoming generic.
+@option abstract | No setting at all: systems and numbers only. Purest to build, hardest to care about.
+@agent No recommendation: this is preference.
+@ruling abstract
+@rationale world to be build , so we make the 'building' of the world good , not an good pre-crafted world
+@end
+
+@decision C2
+@group content
+@title Scope of a single run
+@context How much world and time one playthrough covers. This is the difference
+between a game you finish in an evening and one you keep for a year.
+@option session | One scenario, a few hours, a definite ending.
+@option colony | One settlement, indefinite, growing complexity until it fails.
+@option world | A generated world with its own history, played across generations.
+@agent Recommend colony: it matches the reference genre, it gives an endless difficulty curve without authored content, and it fits A3-colony if that is the ruling.
+@ruling world
+@rationale an world , with scaliable intent , which mean i can play at the scope and timeframe i want , again too far away for now , could be change
+@end
+
+@decision C3
+@group content
+@title Which systems exist in v1
+@context Every system multiplies against every other. This is where scope is actually
+controlled, and picking all of them is the standard way this genre of project dies.
+@option minimal | Needs, work assignment, movement, perception. Four systems, enough to produce behaviour worth watching.
+@option survival | Minimal plus food, temperature, health and injury. The classic pressure loop.
+@option economy | Survival plus items, stockpiles, crafting and value. Where emergent depth usually appears.
+@option social | Economy plus relationships, factions and history generation. The most expensive and the most distinctive.
+@agent Recommend minimal for v1 and survival for v2, sequenced rather than combined. Every one of the reference games reached depth by iterating on a small loop, not by shipping the full set.
+@ruling minimal
+@rationale even this is too much , we need to build the board world and all the tooling first , since we are not working with an game engine .
+@end
+
+@decision C4
+@group content
+@title Time granularity
+@context Decides how long a tick is, how long a day lasts, and whether seasons and
+years exist. Directly sets CPU cost per wall-clock hour and how large a save grows.
+@option fast | Sub-second ticks, real-time feel, thousands of ticks per simulated day.
+@option medium | A tick every few hundred milliseconds with a day of a few minutes.
+@option coarse | A tick per day or per hour, turn-like, very cheap.
+@option layered | Fine ticks for local action, coarse ticks for world processes.
+@agent Recommend medium with a layered approach only if the world is large. The constraint to respect is ticks per real hour multiplied by the cost of one tick.
+@ruling layered
+@rationale speed 1 to 3 , subject to change
+@end
+
+@decision C5
+@group content
+@title Goal and failure structure
+@context Whether the game can be won, lost, or simply ends. It decides what the player
+is optimising and what makes a run worth starting again.
+@option death | A total loss state: everyone dies, the run ends. Simple to define, harsh.
+@option goals | Explicit milestones to achieve. Gives direction, costs authored content.
+@option sandbox | No goal, no ending, only consequences. Cheapest and the purest simulation, weakest for new players.
+@option emergent | Failure is defined by the simulation as a condition, not scripted.
+@agent No recommendation: this is preference and it changes the whole pitch.
+@ruling sandbox
+@rationale sandbox all the way for now
+@end
+
+@decision C6
+@group content
+@title Generated versus authored content
+@context Decides whether the game needs you to write content forever, or whether it
+produces its own. The 8-bit era answer was procedural because storage was scarce;
+here it is a choice about your own time.
+@option proc | Everything generated from rules and seed. Infinite variety, no authoring, and a permanent risk of blandness.
+@option auth | Hand-written content. Distinctive and memorable, and every hour of play costs you an hour of writing.
+@option mixed | Generated structure with authored flavour.
+@agent Recommend generated structure with authored flavour: it keeps the world alive without you, while letting you spend effort where it shows.
+@ruling proc
+@rationale hand-written could happened , but for now we do pure program , we need to make thing simple at first . [round 2: confirmed proc for now , hand-written stays a later possibility]
+@end
+
+@decision C7
+@group content
+@title Prose voice
+@context How the game speaks to the player. In a text game this is not decoration, it
+is the interface.
+@option terse | Log lines and tables. Fast to read, easy to generate, and it looks like a developer tool.
+@option prose | Generated sentences describing events. Far more evocative, and much harder to make good.
+@option hybrid | Terse by default with prose for notable events. Tunes difficulty of both.
+@agent Recommend hybrid: terse is what a player wants on the hundredth repetition, and prose is what makes the first ten memorable.
+@ruling terse
+@rationale not the point for now , keep it easy for now
+@end
+
+# =============================================================================
+# TIER D — POLICY. Standing rules about how the project is run.
+# =============================================================================
+
+@decision D1
+@group policy
+@title Dependency policy
+@context The manifesto says no dependency without a byte justification. That is a
+principle, not a number, and it has already been tested once: the POC needed no crates
+at all.
+@option zero | Zero crates, permanently, std only. Maximum control and portability, and everything including parsers and crypto is yours to write and to get wrong.
+@option budget | Any number, but each must state its byte cost and why a smaller alternative is worse.
+@option allowlist | A short explicit list of approved crates, everything else requires a new ruling.
+@agent Recommend budget, with the standing observation that the POC needed zero. A hard zero forces hand-writing SHA-1 if WebSocket is ever chosen, which is worse than one audited crate.
+@ruling budget
+@rationale I don't thingk zero dependency is good at first phase , we are testing things out
+@end
+
+@decision D2
+@group policy
+@title Where CI runs
+@context Your foundation list named CI/CD. The POC proved aarch64 cross-compilation
+works from an ordinary x86 machine with no root and no cross toolchain, so the shape
+of this is already unblocked.
+@option gha | GitHub Actions. Free minutes, standard, and the build runs off your machine.
+@option local | A local script plus a pre-commit hook. No external dependency, and it only runs if you remember.
+@option both | Local checks for speed, CI as the authority that cannot be skipped.
+@agent Recommend both: local for the fast loop, GitHub Actions as the non-bypassable gate. A gate that only runs when invoked is not a gate.
+@ruling both
+@rationale both it is , we also need to build the cycle out first
+@end
+
+@decision D3
+@group policy
+@title What must pass before anything merges
+@context The bar that stops a change from landing. Set it now while it is cheap,
+because raising a bar later means fixing history.
+@option build | It compiles and the tests pass.
+@option builddet | Build plus the determinism replay test: the same seed and inputs must produce an identical world hash. One test binary, no measurable cost.
+@option buildlint | Build plus formatting and lints treated as errors. Catches a whole class of sloppiness for almost no effort.
+@option full | Build, lint, determinism replay, cross-architecture hash, budget gate. Everything the plan proposes.
+@option fullplus | Full plus a size and memory budget assertion on every commit, not just release.
+@agent Recommend full: this project's whole thesis is that unmeasured budgets drift. The gate is the product.
+@ruling builddet
+@rationale cheap for now , because the first few version will be rolling fast with radical changes . [round 2: the determinism replay test joins the early gate now , because determinism is ratified as mandatory and a check that never runs enforces nothing . Key builddet added to express build plus determinism , since no existing key covered that combination . Lint , cross-arch hash and the budget gate stay out until the substrate exists .]
+@end
+
+@decision D4
+@group policy
+@title Save compatibility across versions
+@context A direct consequence of the determinism choice. It decides whether a player
+who takes a month away can still load their world after you ship three updates.
+@option strict | Any save loads on any later version, with migration code. Most player-friendly, and every format change becomes permanent maintenance.
+@option versioned | A save records its version; incompatible saves are refused with a clear message. Cheap, honest, and it loses worlds.
+@option migration | One-way migration path maintained for a stated number of versions.
+@agent Recommend versioned plus migration for at most one prior format. Unlimited backward compatibility for a solo project is a promise you will break.
+@ruling versioned
+@rationale burn it , don't care , at least for now
+@end
+
+@decision D5
+@group policy
+@title Interface targets
+@context Decides how much the client must handle. The POC client happened to work on
+touch already, but that was not designed.
+@option desktop | Desktop browser only. Simplest, and the reference genre is keyboard-and-mouse anyway.
+@option touch | Touch-first, phone and tablet. Changes the input model and the layout budget substantially.
+@option both | Responsive for both.
+@agent Recommend desktop for v1 with touch deferred, stated explicitly so it is a decision and not an oversight.
+@ruling desktop
+@rationale desktop for now , keep things simple
+@end
+
+@decision D6
+@group policy
+@title Project name
+@context "elysia" was given as provisional. It ends up in the binary name, the unit
+file, the repo and every path, so renaming gets more expensive every day.
+@option keep | Keep elysia permanently.
+@option rename | Choose another now, before anything is deployed.
+@option defer | Keep elysia as a working name and decide before the first deployment.
+@agent Recommend deferring with a dated deadline rather than an open question, because an open naming question gets answered by inertia.
+@ruling defer
+@rationale for now that's the name
+@end
+
+@decision D7
+@group policy
+@title Tick performance budget
+@context A tick must finish before the next one is due, or the world falls behind
+real time and the catch-up logic starts lying. The POC never measured this because
+Pong is trivial.
+@option ms16 | 16 ms per tick — comfortably inside 60 Hz.
+@option ms50 | 50 ms per tick — allows a 20 Hz world, generous headroom.
+@option ms100 | 100 ms per tick — a slower world, far more room for expensive work.
+@agent Recommend ms50 at target scale on one A55 core, measured not assumed. 60 Hz is a rendering rate, not a simulation requirement, and the client can interpolate.
+@ruling ms16
+@rationale 60hz for now
+@end
+
+@decision D8
+@group policy
+@title What the running game exposes
+@context "Rock-solid" needs to be observable. This decides whether you can tell the
+difference between a healthy world and one that has quietly stopped advancing.
+@option none | Nothing. The service either accepts connections or it does not.
+@option health | A health endpoint reporting tick count, world hash and uptime. Small, and it makes silent stalls visible.
+@option metrics | Health plus counters: ticks executed, ticks dropped, save duration, RSS.
+@option logs | Structured log lines saved to a file, plus the above.
+@agent Recommend metrics with a tick-count dead-man's check, because the failure mode this project is most exposed to is a world that is running but not advancing.
+@ruling metrics
+@rationale log for debug .
+@end
+
+@decision X1
+@group content
+@title How entities are built — the uniform model
+@context Every creature, item and the player should share one mechanism, so any entity can act on and be acted on by any other. This is the owner's original note, kept verbatim: abstruct define then ? for example an man have standard stuff like faction , mood , hunger....etc....but if an 'man' got killed , it stop being an man . but if it got morph into let's said an vampire , then stuff changes , or dog ? or maybe soul swap , or maybe the man disguises into someone else , anyway an good quliaty foundation is needed
+@option classhier | Class hierarchy with inheritance. Familiar, and it breaks exactly where the owner's own examples bite: a man that becomes a vampire, a dog, a soul-swap.
+@option archetype | Component archetype — an entity id plus a set of components, with systems operating on component sets. Composition instead of inheritance, so "man" is a bundle not a type.
+@option datasys | Pure data plus table-driven systems — rows in typed tables, systems are queries over tables. Closest to a database: best for serialisation and determinism, least object-oriented.
+@agent No recommendation yet — the owner asked for a prototype before ruling. The question the prototype must answer is whether identity survives a component swap, which is exactly X2.
+@ruling archetype
+@rationale not final , need to try things out first
+@end
+
+@decision X2
+@group content
+@title Identity across transformation — death, vampire, dog, soul swap, disguise
+@context The owner's examples split into two independent questions. X1 asks how entities are built; this asks what happens to "the same entity" when its nature changes. A man has faction, mood, hunger; killed, it stops being a man; morphed into a vampire its components change; or it becomes a dog; or a soul swap; or a disguise. This decides whether identity is a stable id, a set of components, or a layer over one.
+@option replace | Transformation destroys the old entity and creates a new one. Simple and honest — a dead man and a vampire are different entities. The cost is continuity: the vampire carries no history as a man.
+@option mutate | The entity id persists and its components are swapped in place. Continuity holds, one identity across every form. The cost is that every system must tolerate a component set changing underneath it.
+@option overlay | Identity persists, base components stay, transformation adds a layer — a vampire is a modifier on a man. Disguise and soul-swap are naturally layers. The cost is death, which is not a layer and needs special handling.
+@agent No recommendation yet — prototype first, per the owner. The decision that matters is whether history and relationships follow the id or follow the form.
+@ruling mutate
+@rationale swap then , maybe the entity id remain the same , while the rest changes
+@end
+
+@decision A8
+@group blocking
+@title Licence
+@context Split out of A6, which bundled hosting, visibility and licence into one decision. Its gh-public key said "MIT or Apache-2.0" while the owner's words on that same ruling said "Opensource all the way, maybe even AGPL3.0" — AGPL was never an option, so the ruling could not express the answer. A licence is a standing commitment to strangers, and for a server-hosted game the network clause is the whole difference between these options.
+@option mit | Permissive and shortest. Anyone may fork it and run it closed, including as a hosted service.
+@option apache2 | Permissive plus an explicit patent grant. A hosted closed fork is still allowed.
+@option agpl3 | Copyleft with a network clause: anyone running a modified version as a service must publish their source. The clause that bites for a server game.
+@option gpl3 | Copyleft without the network clause: a hosted modified version need not publish. Covers distribution, not service.
+@option dual | MIT or Apache-2.0 at the user's choice — the Rust ecosystem convention. Maximum adoption, no protection.
+@agent No recommendation: this is a values decision, not an engineering one. One fact worth having: AGPL-3.0 is the only option here that keeps a modified hosted fork open, which is the exact failure mode a server-hosted game is exposed to.
+@ruling agpl3
+@rationale for now this is meant for myself ,but i will choose agpl3
+@end
+
+@decision A9
+@group blocking
+@title Git branch model
+@context From the owner's foundation list: "versioning control, branches". This governs every commit from the first one, and migrating later means rewriting history. It sets what a merge even means, and what the D3 gate is attached to.
+@option trunk | Trunk-based: short-lived branches, everything lands on main, CI on every push. Fastest loop; relies on the gate rather than review to catch breakage.
+@option branchpr | One branch per change, opened as a pull request even solo. Every change gets a diff, a description and a review moment, and the history stays legible.
+@option gitflow | Long-lived develop/release/hotfix branches. Built for scheduled releases with parallel maintenance; heavy for one author with no releases yet.
+@option direct | Commit straight to main, no branches. Simplest possible; the only nets are CI and revert.
+@agent No recommendation — this is preference, not engineering. The tradeoff is legibility of history against speed of the loop, and the owner is the one who has to read it later.
+@ruling trunk
+@rationale for now , need to test
+@end
+
+@decision A10
+@group blocking
+@title Code structure standard
+@context From the owner's foundation list: "standard of how the code structure across the entire project". This decides where every file lives before the second file exists, and it is the one place where the project's own rule — mechanism over vigilance — applies most directly.
+@option layered | Strict layers — sim core, world, content, net, main — with dependencies pointing only inward. The sim core never reads a file, a socket or a clock. Enforced by convention and review.
+@option crates | The same layering, but each layer is its own workspace crate, so a wrong-way dependency fails to compile. The boundary is enforced by the toolchain, not by discipline.
+@option feature | Feature-first modules: each feature owns its tree (needs/, work/, movement/). Reads naturally; shared machinery drifts into whichever feature needed it first.
+@option flat | A flat module list until it hurts, then split. Least ceremony now, most churn later.
+@agent No recommendation yet. Note only what the project already believes: crates makes the boundary mechanical, layered asks humans to remember it.
+@ruling crates
+@rationale need some more thoughts on this one , i guess crates for now , i will have to see the code later
+@end
+
+@decision A11
+@group blocking
+@title What gets built first
+@context The owner's direction has been consistent across C3 and B3 — build the tooling first, prove it works, scale much later — and it was restated directly on 2026-11-11. It is recorded as a decision because "what is Phase 1" otherwise stays implicit and drifts.
+@option tooling | Tooling and the bare minimum: repo, CI, merge gate, determinism harness, a walkable world skeleton, and a browser client that draws it. No gameplay systems yet.
+@option vertical | Thinnest playable slice: one agent, one need, one action, rendered end to end. Proves the whole stack works together at the smallest size.
+@option engine | Engine substrate only: tick loop, entity store, save and replay, determinism harness, with no client until it is solid.
+@option spike | Throwaway spikes per unknown, discarded, then built for real.
+@agent No recommendation — the owner has already stated the direction twice.
+@ruling tooling
+@rationale tooling and the bare minimum first . [recorded from the owner's message of 2026-11-11, consistent with the C3 and B3 rationales]
+@end
+
+@decision E1
+@group blocking
+@title Version numbering, and where the version is visible
+@context Nothing in the tree carries a version: Cargo.toml says 0.0.0, and the string CARGO_PKG_VERSION appears in no crate. /health reports only ok, seed and man, so "which build is on the board" is answerable today only by hashing the binary. D4 already requires a save to record the version that wrote it, and that requirement cannot be met until this one is decided.
+@option semver3 | 0.MINOR.PATCH while pre-1.0. Tag every shipped feature. The version is compiled in via CARGO_PKG_VERSION, reported by /health, and stamped into every save per D4.
+@option hashonly | No version numbers. The build is identified by its git commit hash, printed by /health and stamped into the save.
+@option dated | Calendar versioning, one number, ordered by construction, with no notion of a breaking change.
+@option majoronly | Bump only when the owner asks for it, and ignore the minor/patch distinction until 1.0.
+@agent Recommendation: semver3. It is the only option that gives D4 something to compare on load, and it is the convention the project's own measurements already used.
+@ruling semver3
+@rationale stick to your reference for now [recorded from the owner's message of 2026-11-12, choosing the researched recommendation for now]
+@end
+
+@decision E2
+@group blocking
+@title How an update reaches the board
+@context A1 fixes the shape of a release — one binary, no root after install, rollback is restoring the previous file — but not who performs the swap, nor whether the board may update itself. This is the decision that decides how much machinery has to exist before the first real push.
+@option manual | The owner, or the agent on the owner's instruction, builds, installs a versioned file, flips the symlink, restarts the unit and checks /health. Rollback is the flip reversed.
+@option pull | The board polls a feed or a git remote and installs on its own. Needs a standing credential and a runner on a 1 GB SD-card device.
+@option pushssh | The build machine pushes over SSH and restarts the unit remotely. Needs a key on the board and an inbound path to it.
+@option manualwatch | Manual, plus a watchdog that rolls back automatically if /health stops reporting an advancing tick.
+@agent Recommendation: manual for now. Automating a two-command swap buys little and costs a standing credential on the device.
+@ruling manual
+@rationale manual , we want to keep it simple for now [recorded from the owner's message of 2026-11-12]
+@end
+
+@decision E3
+@group blocking
+@title Who may write a ruling, on the wire
+@context This file's header says only the owner writes @ruling, and that is enforced nowhere on the network. The console's POST /api/rule and POST /api/add carry no token, no secret and no session, and the running instance was deliberately bound to 0.0.0.0 so the page is usable from another machine, which makes reaching the page the whole of the authorisation. Recorded as a decision rather than fixed silently, because it trades integrity for usability and that trade belongs to the owner.
+@option lantrust | No authentication. The LAN is trusted and the console stays reachable from any device. The risk is accepted and written down here rather than left implicit.
+@option token | A shared secret required on the two write routes, read from the vault at start; reads stay open.
+@option loopback | Bind 127.0.0.1 only. Ruling happens on the board's own machine or over a tunnel.
+@option tokentls | Token plus TLS, for the case where the console leaves the LAN.
+@agent Recommendation: lantrust now, token before the console is ever exposed beyond the LAN. The workflow is the priority; the mitigation is one route guard when it is wanted.
+@ruling lantrust
+@rationale lan-trust for now , security is indeed something we have to think about , but we need an working workflow first [recorded from the owner's message of 2026-11-12]
+@end
+
+@decision E4
+@group blocking
+@title When the realtime step loop lands
+@context A2 rules realtime, but the demo has no tick loop: the man's position is unchanged over an idle interval, so today's build is effectively A2 step. The register therefore describes a behaviour the code does not have. Either the loop lands, or the gap is recorded with a decision behind it, so the next session does not read A2 as satisfied.
+@option nextver | Defer to the next version. Until then the build is step-on-request, and this block is the record of that. Workflow and tooling stay the priority.
+@option now | Add the fixed-step loop in the same increment as the next change; the tick advances state on its own and the hash must cover it.
+@option ondemand | Advance the tick on any request, so the world moves whenever somebody is watching, with no background loop.
+@option never | Drop A2 realtime and rule step-on-request permanently.
+@agent Recommendation: nextver. It keeps the current increment small, and it states the gap instead of leaving A2 looking done.
+@ruling nextver
+@rationale add it in the next version , but make sure to keep everything simple for now , what matter most is the workflow and tooling for now [recorded from the owner's message of 2026-11-12]
+@end
+
+@decision E5
+@group blocking
+@title How a fresh session or another agent learns the rules
+@context The repo currently has no README, no AGENTS.md and no docs directory. Everything that makes an agent behave — the register, the gate, the layer boundary, the declared gaps — lives in a notes directory outside the repo. A fresh session gets the code and nothing else, and an instruction that lives only in a chat log is not an instruction.
+@option agentsmd | AGENTS.md at the repo root plus a README for humans. AGENTS.md points at the register and the gate and never restates them, so there is exactly one copy of every decision.
+@option agentsclaude | AGENTS.md plus a one-line CLAUDE.md pointer, for tools that only look for the Claude filename.
+@option inrepoall | A full in-repo governance document that restates the principles and the decisions.
+@option external | Keep continuity outside the repo. The repo carries code only.
+@agent Recommendation: agentsmd. A second copy of the decisions is the failure this project has spent weeks removing.
+@ruling
+@end
+
+@decision E6
+@group development
+@title Where hover information comes from
+@context The next feature is hover: pointing at a tile or an entity shows what it is. Three sources exist and they differ in cost per poll, not in what the player sees. B6 already fixes that the board sends text and the browser draws it.
+@option legend | The legend is embedded in the page, generated from the same Rust source as Terrain::ch(), so tile text costs zero bytes per poll and cannot drift from what is drawn.
+@option tileendpoint | A /tile?x=&y= endpoint queried as the mouse moves. Always fresh, and one request per mouse move against a single-threaded server.
+@option payload | Every /state poll carries a name and a description for each visible cell. No extra requests, and the payload grows with the viewport on every poll.
+@option clienttable | A terrain-name table written into the client script by hand. Cheapest to write, and it drifts silently from the server's own table.
+@agent Recommendation: legend for tiles, with entity detail folded into the existing /state payload, because entity data is runtime state and terrain data is static.
+@ruling
+@end
