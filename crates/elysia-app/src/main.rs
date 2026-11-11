@@ -108,7 +108,9 @@ setInterval(refresh, 250);
 /// Serialise world + man for the client. `hash` is a string on purpose: a u64
 /// exceeds JavaScript's safe integer range and would lose precision as a number.
 fn state_json(world: &mut World, man: Man) -> String {
-    let hash = world.hash();
+    // state_hash, not hash(): the fingerprint must cover the entity too, or two
+    // different game states report the same number (L01).
+    let hash = world.state_hash(&man);
     let rows = world.rows();
     let mut s = String::with_capacity(MAPW as usize * MAPH as usize + 512);
     let _ = write!(
@@ -160,9 +162,15 @@ fn main() {
                 man.step(&mut world, dx, dy);
                 Response::json(state_json(&mut world, man))
             }
+            // D8 metrics + E1 semver3: the version has to be answerable at
+            // runtime, or "which build is on the board?" is answerable only by
+            // hashing the binary (L08). The hash makes a silent stall visible.
             ("GET", "/health") => Response::json(format!(
-                "{{\"ok\":true,\"seed\":{seed},\"man\":[{},{}]}}",
-                man.x, man.y
+                "{{\"ok\":true,\"version\":\"{}\",\"seed\":{seed},\"man\":[{},{}],\"hash\":\"{:016x}\"}}",
+                env!("CARGO_PKG_VERSION"),
+                man.x,
+                man.y,
+                world.state_hash(&man)
             )),
             _ => Response::not_found(),
         }

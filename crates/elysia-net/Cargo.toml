@@ -5,8 +5,12 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# A10: net depends on core, world, content — never app.
+# A10: net depends on core only — never world, content or app.
 [dependencies]
+# A10 inward-only. The transport layer owns no game knowledge: it sits above
+# core and below app, and anything it needs from the world arrives as bytes from
+# its caller. `elysia-world` and `elysia-content` used to be listed here while
+# being imported nowhere, which meant a wrong-way import would have compiled
+# silently — precisely the boundary A10 wanted the toolchain to enforce, not the
+# reviewer to remember.
 elysia-core = { path = "../elysia-core" }
-elysia-world = { path = "../elysia-world" }
-elysia-content = { path = "../elysia-content" }

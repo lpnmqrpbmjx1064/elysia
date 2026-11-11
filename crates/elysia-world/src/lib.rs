@@ -123,6 +123,17 @@ pub struct World {
     chunks: BTreeMap<(i32, i32), Chunk>,
 }
 
+/// FNV-1a step, shared by every hash in this module so two implementations
+/// cannot drift apart. A state hash that disagrees with the map hash by one
+/// multiply constant is the kind of defect that reads as "no bug" until a replay
+/// silently fails to reproduce.
+fn eat(h: &mut u64, v: u64) {
+    for b in v.to_le_bytes() {
+        *h ^= u64::from(b);
+        *h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+}
+
 impl World {
     pub fn new(seed: u64) -> World {
         World {
@@ -162,18 +173,26 @@ impl World {
     /// not by storage, so the same seed always yields the same hash.
     pub fn hash(&mut self) -> u64 {
         let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-        let eat = |h: &mut u64, v: u64| {
-            for b in v.to_le_bytes() {
-                *h ^= u64::from(b);
-                *h = h.wrapping_mul(0x0000_0100_0000_01b3);
-            }
-        };
         eat(&mut h, self.seed);
         for y in 0..MAPH {
             for x in 0..MAPW {
                 eat(&mut h, self.tile(x, y) as u64);
             }
         }
+        h
+    }
+
+    /// Fingerprint of the whole shipped state: the terrain *and* the entity that
+    /// moves over it.
+    ///
+    /// `hash()` covers only the map, so two different game states — same world,
+    /// player in a different place — reported the same fingerprint. That made the
+    /// number in `/state` useless as a state check: it could not tell "the world
+    /// advanced" from "the world sat still" (L01).
+    pub fn state_hash(&mut self, man: &Man) -> u64 {
+        let mut h = self.hash();
+        eat(&mut h, man.x as i64 as u64);
+        eat(&mut h, man.y as i64 as u64);
         h
     }
 

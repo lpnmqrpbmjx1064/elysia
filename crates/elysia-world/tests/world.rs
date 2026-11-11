@@ -152,3 +152,45 @@ fn terrain_mix_report() {
     }
     assert_eq!(c.iter().sum::<usize>(), (MAPW * MAPH) as usize);
 }
+
+/// L01: the fingerprint the app reports must cover the entity, not just the
+/// terrain. Before this, two different game states — same world, player in a
+/// different place — reported the same hash, so the number in `/state` could not
+/// tell "the player moved" from "nothing happened".
+#[test]
+fn state_hash_covers_the_entity() {
+    let mut a = World::new(9);
+    let mut ma = Man::spawn(&mut a);
+    let mut b = World::new(9);
+    let _ = Man::spawn(&mut b);
+
+    assert_eq!(
+        a.state_hash(&ma),
+        b.state_hash(&ma),
+        "two runs of the same seed at the same position must agree"
+    );
+
+    let before = a.state_hash(&ma);
+    ma.x += 1;
+    assert_ne!(
+        before,
+        a.state_hash(&ma),
+        "state hash ignores the entity position — it is a map hash wearing a state hash's name"
+    );
+}
+
+/// The map hash on its own must keep its old meaning: terrain only, so a pure
+/// terrain comparison is still available beside the state comparison.
+#[test]
+fn map_hash_ignores_the_entity() {
+    let mut a = World::new(9);
+    let mut ma = Man::spawn(&mut a);
+    let before = a.hash();
+    ma.x += 1;
+    assert_eq!(before, a.hash(), "hash() leaked entity state into the map hash");
+    assert_ne!(
+        before,
+        a.state_hash(&ma),
+        "state_hash must differ from hash() once an entity is present"
+    );
+}

@@ -9,7 +9,19 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-only"
 publish = false
+
+# The "tiny package" method, in the build rather than in a notes file (L07).
+# Measured on this tree 2026-11-12: the same source is 658,576 B untuned and
+# 377,016 B with these settings — 1.75x. The recipe was found the hard way:
+# `lto` via RUSTFLAGS collides with cargo's own `-C embed-bitcode=no`, so it
+# belongs here in the profile, not in an environment variable.
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "elysia-app"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "elysia-content",
  "elysia-core",
@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "elysia-content"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "elysia-core",
  "elysia-world",
@@ -22,20 +22,18 @@ dependencies = [
 
 [[package]]
 name = "elysia-core"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "elysia-net"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
- "elysia-content",
  "elysia-core",
- "elysia-world",
 ]
 
 [[package]]
 name = "elysia-world"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "elysia-core",
 ]
