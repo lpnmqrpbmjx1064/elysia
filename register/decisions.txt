@@ -614,5 +614,6 @@ difference between a healthy world and one that has quietly stopped advancing.
 @option payload | Every /state poll carries a name and a description for each visible cell. No extra requests, and the payload grows with the viewport on every poll.
 @option clienttable | A terrain-name table written into the client script by hand. Cheapest to write, and it drifts silently from the server's own table.
 @agent Recommendation: legend for tiles, with entity detail folded into the existing /state payload, because entity data is runtime state and terrain data is static.
-@ruling
+@ruling legend
+@ruledby owner, Telegram, 2026-11-12 — "E6 will be your recommendation then". Transcribed by the agent, not decided by it: the recommendation above becomes the ruling at the owner's instruction, on its own stated reason — tile text costs zero bytes per poll, and the legend is generated from the same Rust source as Terrain::ch() so it cannot drift from what is drawn. Entity detail still rides in /state because entity data is runtime state, not static text. Overwrite in the console if the reading is wrong.
 @end
