@@ -20,8 +20,10 @@ cd "$(dirname "$0")/.." || exit 2
 REPO="$PWD"
 export PATH="$HOME/.cargo/bin:$PATH"
 
-RUN="$HOME/hermes-notes/runs/sim-engine-20261111"
-REGISTER="$RUN/elysia-console/decisions.txt"
+RUN="${ELYSIA_RUN_DIR:-}"
+# The register lives in this repository. The console serves the same file through a
+# symlink, so these checks read the tracked copy and the repo carries no host path.
+REGISTER="$REPO/register/decisions.txt"
 # Loopback by default so the repo carries no internal network address, and so the suite
 # runs anywhere the service is reachable. Point these elsewhere when testing across the
 # LAN: ELYSIA_CONSOLE=http://<host>:8124 ELYSIA_APP=http://<host>:8125 bash scripts/smoke.sh
@@ -108,8 +110,8 @@ else no "open count disagrees: api=$API_OPEN file=$FILE_OPEN"; fi
 # ── stage 1: the plan surface a newcomer would read ─────────────────────────
 stage 1 "plan / docs"
 for f in MANIFESTO.md PHASE1-CHECKLIST.md PHASE1-PLAN.md LOOSE-ENDS.md; do
-  if [ -s "$RUN/$f" ]; then ok "$f present ($(stat -c%s "$RUN/$f") B)"
-  else no "$f missing or empty"; fi
+  if [ -n "$RUN" ] && [ -s "$RUN/$f" ]; then ok "$f present ($(stat -c%s "$RUN/$f") B)"
+  else no "$f missing or empty — set ELYSIA_RUN_DIR to the run directory holding notes-side evidence${RUN:+ (looked in $RUN)}"; fi
 done
 for f in README.md AGENTS.md; do
   if [ -s "$REPO/$f" ]; then ok "$f present"
@@ -224,9 +226,9 @@ else no "move endpoint did not return entity state"; fi
 stage 5 "record"
 if [ -d loop-records ] && [ -w loop-records ]; then ok "repo loop-records/ writable"
 else no "repo loop-records/ missing or not writable"; fi
-if [ -d "$HOME/hermes-notes/runs/loop-records" ] && [ -w "$HOME/hermes-notes/runs/loop-records" ]; then
+if [ -n "$RUN" ] && [ -d "$(dirname "$RUN")/loop-records" ] && [ -w "$(dirname "$RUN")/loop-records" ]; then
   ok "notes loop-records/ writable"
-else no "notes loop-records/ missing or not writable"; fi
+else no "notes loop-records/ missing, not writable, or ELYSIA_RUN_DIR unset"; fi
 
 # ── stage 6: commit readiness ───────────────────────────────────────────────
 stage 6 "commit"

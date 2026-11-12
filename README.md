@@ -26,9 +26,9 @@ register and the gates, not the tone.
 ## The register
 
 `register/decisions.txt` is the source of truth for this project — every design
-decision, what was ruled, what was deferred and why. The console in
-`~/hermes-notes/.../elysia-console/` serves it at `http://<host>:8124/`, reading
-the file on every request so hand edits appear immediately.
+decision, what was ruled, what was deferred and why. A local console (maintainer
+tooling, not part of this repository) serves it at `http://<host>:8124/`,
+re-reading the file on every request so a hand edit appears immediately.
 
 Only the owner writes `@ruling` and `@rationale`. Contributions may add
 `@context`, `@option` and `@agent`; they may never fill a ruling in.

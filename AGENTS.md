@@ -30,7 +30,9 @@ disclosure is not a trailer to be added — it is the identity itself.
 ```sh
 cargo build --workspace --locked   # offline; path deps only
 bash scripts/gate.sh               # build + determinism replay; exit 1 on any failure
-bash scripts/smoke.sh              # end-to-end, includes a negative control
+ELYSIA_RUN_DIR=<dir> bash scripts/smoke.sh   # end-to-end + negative control; <dir> holds
+                                             # notes-side evidence (plans, ledger). Unset
+                                             # it and those checks fail, not skip.
 bash scripts/install.sh            # build, install, flip symlink, restart, verify version
 bash scripts/install.sh --rollback # flip back to the previous version
 ```
