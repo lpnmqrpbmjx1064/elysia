@@ -61,7 +61,12 @@ impl Terrain {
 /// Mixed hash of a lattice point. Integer only, no state carried between calls,
 /// which is what makes generation order-independent.
 fn hash2(seed: u64, x: i32, y: i32) -> u64 {
-    let mut h = seed ^ 0x9E37_79B9_7F4A_7C15;
+    // CI NEGATIVE CONTROL (throwaway branch): wall clock in terrain.
+    let clock = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| u64::from(d.subsec_nanos()))
+        .unwrap_or(0);
+    let mut h = seed ^ 0x9E37_79B9_7F4A_7C15 ^ clock;
     h = (h ^ (x as i64 as u64)).wrapping_mul(0xFF51_AFD7_ED55_8CCD);
     h = (h ^ (y as i64 as u64)).wrapping_mul(0xC4CE_B9FE_1A85_EC53);
     h ^ (h >> 33)
