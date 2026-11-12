@@ -88,7 +88,15 @@ try:
 except Exception:
     print("0 0 0")')
 read -r API_TOTAL API_RULED API_OPEN <<<"$API"
-FILE_OPEN=$(grep -c '^@ruling[[:space:]]*$' "$REGISTER" 2>/dev/null || echo -1)
+# `grep -c` prints 0 AND exits 1 when there are no matches, so `|| echo -1` appended a
+# second line and FILE_OPEN became "0\n-1" — which read as a disagreement the first time
+# the register legitimately reached zero open decisions. Separate "cannot read the file"
+# from "read it, counted zero", and swallow grep's exit status without losing its stdout.
+if [ -r "$REGISTER" ]; then
+  FILE_OPEN=$(grep -c '^@ruling[[:space:]]*$' "$REGISTER" || true)
+else
+  FILE_OPEN=-1
+fi
 if [ "$API_TOTAL" = "$B" ]; then ok "console serves $API_TOTAL decisions = file's $B"
 else no "console serves $API_TOTAL decisions but the file has $B"; fi
 if [ "$API_OPEN" = "$FILE_OPEN" ]; then ok "open count agrees: $API_OPEN ruled=$API_RULED"
