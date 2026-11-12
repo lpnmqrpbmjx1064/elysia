@@ -13,6 +13,18 @@ so this file restates no decision, and there is exactly one copy of each.
 LAN, budgeted for a 1 GB RK3566 (E1, Xen). Rust workspace, path dependencies only: no
 external crates, no runtime, no framework.
 
+## Authorship
+
+This repository declares that its code is written by an AI agent — README, "Authorship",
+ruled **A12**. Keep that true, and keep it in the metadata too: commits are authored as
+
+```
+Hermes <hermes@elysia.invalid>
+```
+
+Never configure a personal name or address here, and never let one into a commit. The
+disclosure is not a trailer to be added — it is the identity itself.
+
 ## Commands
 
 ```sh

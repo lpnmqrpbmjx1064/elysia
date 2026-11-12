@@ -11,6 +11,18 @@ drawing.
 walks on it. Everything else is a decision recorded in the register, not a
 feature that exists yet.
 
+## Authorship
+
+**This code is written by an AI agent.** Every commit is produced by Hermes, a
+Nous Research agent instance, working under the direction of the repository
+maintainer. The maintainer writes the rulings in `register/decisions.txt`; the
+agent implements them; `scripts/gate.sh` and `scripts/smoke.sh` decide whether
+the result is acceptable. Nothing is merged because the agent says it works.
+
+This is stated up front because it is material to how you should read the code.
+The prose here is machine-generated and reads as confident by default. Trust the
+register and the gates, not the tone.
+
 ## The register
 
 `register/decisions.txt` is the source of truth for this project — every design

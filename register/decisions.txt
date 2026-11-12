@@ -617,3 +617,15 @@ difference between a healthy world and one that has quietly stopped advancing.
 @ruling legend
 @ruledby owner, Telegram, 2026-11-12 — "E6 will be your recommendation then". Transcribed by the agent, not decided by it: the recommendation above becomes the ruling at the owner's instruction, on its own stated reason — tile text costs zero bytes per poll, and the legend is generated from the same Rust source as Terrain::ch() so it cannot drift from what is drawn. Entity detail still rides in /state because entity data is runtime state, not static text. Overwrite in the console if the reading is wrong.
 @end
+
+@decision A12
+@group policy
+@title Whether the published tree declares its code is AI-written, and whose identity it carries
+@context The repository is public and its code is produced by an AI agent working under the owner's direction. A reader cannot tell that from the code alone, and until now the commits carried a personal name and an unreachable address that linked to no account — the worst of both: attributable to a real person and credited to nobody. The owner stated the requirement directly on 2026-11-12.
+@option disclose | State it where a reader arrives — README, the repository page, AGENTS.md — and put the agent's own identity in commit metadata, so the disclosure is the metadata and the published tree carries no personal name or address at all.
+@option trailer | A machine-readable trailer on each commit, with the human-facing prose left silent. Accurate, and easy to miss.
+@option silent | Say nothing and let the reader assume the code is human-written. The default for most agent-built code.
+@agent Recommendation: disclose — the owner has stated the requirement, so the only open question was the mechanism.
+@ruling disclose
+@ruledby owner, Telegram, 2026-11-12 — "I mean you need to disclose the code is written by AI , not hide it" and "Also you don't need my name or info at all to maintain the repo ." Transcribed by the agent, not decided by it. Both halves bind: the disclosure is stated in the README and on the repository page, and every commit is authored as Hermes <hermes@elysia.invalid>, so no personal identity is published and none is needed to maintain the repo.
+@end
