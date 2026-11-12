@@ -6,7 +6,6 @@ version = 4
 name = "elysia-app"
 version = "0.1.0"
 dependencies = [
- "elysia-content",
  "elysia-core",
  "elysia-net",
  "elysia-world",

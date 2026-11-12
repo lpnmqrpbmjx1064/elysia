@@ -1,0 +1,25 @@
+# Determinism (P3) starts with bytes. Without this, a checkout on a system that
+# defaults to CRLF rewrites every text file it touches, which would change the
+# register, the scripts and the source all at once — a diff nobody authored.
+#
+# `register/decisions.txt` matters most: it is parsed line-by-line and the console
+# re-reads it on every request, so a stray \r becomes a stray character in a ruling.
+* text=auto eol=lf
+
+*.rs      text eol=lf
+*.toml    text eol=lf
+*.lock    text eol=lf
+*.md      text eol=lf
+*.txt     text eol=lf
+*.sh      text eol=lf
+*.py      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.service text eol=lf
+
+# Keep images and archives out of line-ending handling entirely.
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.gz   binary
+*.tar  binary

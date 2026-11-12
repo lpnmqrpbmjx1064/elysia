@@ -9,5 +9,9 @@ publish.workspace = true
 [dependencies]
 elysia-core = { path = "../elysia-core" }
 elysia-world = { path = "../elysia-world" }
-elysia-content = { path = "../elysia-content" }
+# `elysia-content` was declared here and imported nowhere. Same defect class as the
+# one removed from `elysia-net`: an unused edge lets a wrong-way import compile
+# silently, which is exactly what A10 wanted the toolchain to prevent. The crate
+# stays a workspace member under C6 (content is procedural); it gets wired when
+# there is content to wire (L19).
 elysia-net = { path = "../elysia-net" }
