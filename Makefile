@@ -7,7 +7,7 @@
 #
 #     ELYSIA_RUN_DIR=<run dir> make test
 
-.PHONY: test gate smoke install rollback
+.PHONY: test gate smoke okr install rollback
 
 test: gate smoke
 
@@ -16,6 +16,11 @@ gate:
 
 smoke:
 	bash scripts/smoke.sh
+
+# Movement, not soundness: reports the key results in OKR.md. Deliberately not part of
+# `test` — an unmet key result is information, not a broken tree.
+okr:
+	python3 scripts/okr.py
 
 install:
 	bash scripts/install.sh
