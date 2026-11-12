@@ -1,5 +1,11 @@
 /target/
 
+# Python bytecode from the helper scripts. scripts/ are run as `python3 scripts/x.py`,
+# which writes no cache, but py_compile and any future import will. Kept out so a check
+# command cannot dirty the tree it is checking.
+__pycache__/
+*.pyc
+
 # Local process records, not part of the shipped product. Kept out of the
 # published repository so internal loop notes never ship with the source.
 /loop-records/
