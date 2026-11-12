@@ -5,7 +5,13 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# A10: content depends on core and world only — never net, never app.
+# A10: content may depend on core and world only — never net, never app.
 [dependencies]
-elysia-core = { path = "../elysia-core" }
-elysia-world = { path = "../elysia-world" }
+# A stub that imports nothing, so it declares nothing. Listing `elysia-core` and
+# `elysia-world` here while importing neither was the same defect removed from
+# elysia-net and elysia-app: the manifest claimed edges the code never used, and
+# nothing in the toolchain warns about that.
+#
+# The fence is unchanged, and in fact wider: cargo resolves only declared edges, so
+# reaching for net or app — or core or world — fails to resolve until an increment
+# genuinely needs it, at which point the edge is a one-line addition a reviewer sees.

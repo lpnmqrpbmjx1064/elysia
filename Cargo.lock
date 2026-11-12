@@ -14,10 +14,6 @@ dependencies = [
 [[package]]
 name = "elysia-content"
 version = "0.1.0"
-dependencies = [
- "elysia-core",
- "elysia-world",
-]
 
 [[package]]
 name = "elysia-core"
