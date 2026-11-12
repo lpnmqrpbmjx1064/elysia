@@ -601,7 +601,8 @@ difference between a healthy world and one that has quietly stopped advancing.
 @option inrepoall | A full in-repo governance document that restates the principles and the decisions.
 @option external | Keep continuity outside the repo. The repo carries code only.
 @agent Recommendation: agentsmd. A second copy of the decisions is the failure this project has spent weeks removing.
-@ruling
+@ruling agentsmd
+@ruledby owner, Telegram, 2026-11-12 — "didn't I already tell you to research and self gate?" Transcribed by the agent, not decided by it. The research already pointed at agentsmd: agents.md is a command-bearing README for agents (setup, test, style, PR rules), not governance prose, so it points at the register and the gate and restates neither. Overwrite this in the console if the reading is wrong.
 @end
 
 @decision E6
