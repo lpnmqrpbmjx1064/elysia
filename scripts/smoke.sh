@@ -22,8 +22,11 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 RUN="$HOME/hermes-notes/runs/sim-engine-20261111"
 REGISTER="$RUN/elysia-console/decisions.txt"
-CONSOLE="http://127.0.0.1:8124"
-APP="http://127.0.0.1:8125"
+# Loopback by default so the repo carries no internal network address, and so the suite
+# runs anywhere the service is reachable. Point these elsewhere when testing across the
+# LAN: ELYSIA_CONSOLE=http://<host>:8124 ELYSIA_APP=http://<host>:8125 bash scripts/smoke.sh
+CONSOLE="${ELYSIA_CONSOLE:-http://127.0.0.1:8124}"
+APP="${ELYSIA_APP:-http://127.0.0.1:8125}"
 MUTANT=0
 [ "${1:-}" = "--mutant" ] && MUTANT=1
 
