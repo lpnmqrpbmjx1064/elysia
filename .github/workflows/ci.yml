@@ -20,7 +20,9 @@ jobs:
   builddet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to a 40-hex commit, not a movable tag: `@v4` can be repointed under us,
+      # and a workflow that silently changes what it runs is a check you cannot trust.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: toolchain (matches rust-toolchain.toml)
         run: rustup show active-toolchain
