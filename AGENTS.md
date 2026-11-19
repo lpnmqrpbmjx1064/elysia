@@ -29,6 +29,7 @@ disclosure is not a trailer to be added — it is the identity itself.
 
 ```sh
 make test                          # the canonical gate: gate.sh then smoke.sh
+make okr                           # key results from OKR.md; measures, never gates
 cargo build --workspace --locked   # offline; path deps only
 bash scripts/gate.sh               # build + determinism replay; exit 1 on any failure
 ELYSIA_RUN_DIR=<dir> bash scripts/smoke.sh   # end-to-end + negative control; <dir> holds
