@@ -7,7 +7,7 @@
 #
 #     ELYSIA_RUN_DIR=<run dir> make test
 
-.PHONY: test gate smoke okr install rollback
+.PHONY: test gate smoke citations okr install rollback
 
 test: gate smoke
 
@@ -16,6 +16,11 @@ gate:
 
 smoke:
 	bash scripts/smoke.sh
+
+# The same check smoke stage 0 runs, reachable on its own: a fresh clone or a
+# register edit can be checked without a build. Logic stays in scripts/.
+citations:
+	python3 scripts/check_citations.py
 
 # Movement, not soundness: reports the key results in OKR.md. Deliberately not part of
 # `test` — an unmet key result is information, not a broken tree.

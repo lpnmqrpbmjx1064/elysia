@@ -11,6 +11,15 @@ section below, so the tag, the declared version and these notes cannot drift apa
 
 ### Added
 
+- `scripts/check_citations.py` closes the register's unenforced half: every explicit
+  `@decision <id>` citation in code, tests and docs must resolve to a live id in
+  `register/decisions.txt`, and a citation of a superseded id fails. Run by `make citations`,
+  by smoke stage 0, and by CI — it reads only the tree, so it runs where smoke cannot.
+  Adapted from solidjs/solid's `rules-index` check, which enforces the same link between its
+  rules and its code.
+- Smoke stages 4, 6 and 7 now cite the decisions their assertions actually enforce
+  (`@decision A10`, `A9`, `A1`), so a label is traceable to the register rather than merely
+  similar to it.
 - `make okr` reads `OKR.md`, runs each declared `@measure` command and prints the numbers.
   `scripts/okr.py` computes the score, so a key result is a number a command produces and
   never a number written down by hand.

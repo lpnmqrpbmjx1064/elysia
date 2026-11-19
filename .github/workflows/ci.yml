@@ -27,5 +27,11 @@ jobs:
       - name: toolchain (matches rust-toolchain.toml)
         run: rustup show active-toolchain
 
+      # Citation integrity needs only the tree, so it can run here; smoke.sh
+      # cannot, because it reads evidence that deliberately lives outside the
+      # repo. Same script, so there is one copy of the rule.
+      - name: citations
+        run: python3 scripts/check_citations.py
+
       - name: gate
         run: ./scripts/gate.sh

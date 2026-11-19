@@ -52,6 +52,19 @@ DUP=$(grep '^@decision' "$REGISTER" 2>/dev/null | sort | uniq -d | wc -l)
 if [ "$DUP" -eq 0 ]; then ok "no duplicate decision ids"
 else no "$DUP duplicate decision ids"; fi
 
+# Recording a ruling is not the same as making the tree govern by it, so the
+# other half of the register is checked too: every explicit `@decision <id>`
+# citation must resolve to a live id in this file. The checker fails on a
+# citation of an unknown id, a citation of a superseded one, and a malformed
+# keyword (@decisions, @req). It needs only the tree, so CI runs it as well.
+CITE_OUT=$(python3 "$REPO/scripts/check_citations.py" 2>&1); CITE_RC=$?
+CITE_CEN=$(printf '%s\n' "$CITE_OUT" | grep -oE '[0-9]+/[0-9]+ decision\(s\) cited' | head -1)
+case "$CITE_RC" in
+  0) ok "citation integrity: ${CITE_CEN:-0 cited}, every citation resolves" ;;
+  2) no "citation check BLOCKED — could not read its input: $(printf '%s\n' "$CITE_OUT" | grep -E 'C[01] ' | head -1 | sed 's/^ *//' | cut -c1-110)" ;;
+  *) no "citation integrity: $(printf '%s\n' "$CITE_OUT" | grep -E 'C3 citations|C5 doc links' | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-110)" ;;
+esac
+
 VAL=$(python3 - "$REGISTER" <<'PY'
 import re,sys
 try: txt=open(sys.argv[1]).read()
@@ -179,6 +192,9 @@ allows() { local got="$1"; shift; local d
   for d in $got; do case " $* " in *" $d "*) ;; *) return 1 ;; esac; done; return 0; }
 
 CORE_D=$(deps_of elysia-core)
+# @decision A10 — the ruling is `crates`: each layer is its own workspace crate so
+# a wrong-way dependency fails to compile. These three assertions are the same
+# boundary seen from the manifests rather than the compiler.
 if [ -z "$CORE_D" ]; then ok "core depends on nothing (A10 inward-only)"
 else no "core has dependencies: $CORE_D"; fi
 if allows "$(deps_of elysia-world)" elysia-core; then ok "world depends on core only"
@@ -236,6 +252,8 @@ DIRTY=$(git status --porcelain 2>/dev/null | wc -l)
 if [ "$DIRTY" -eq 0 ]; then ok "working tree clean"
 else no "$DIRTY path(s) uncommitted"; fi
 BR=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+# @decision A9 — the ruling is `trunk`: everything lands on main, so a detached
+# HEAD or a stray working branch is the failure this catches.
 if [ "$BR" = "main" ]; then ok "on main (A9 trunk)"
 else no "branch is '$BR', expected main"; fi
 if git rev-parse --verify HEAD >/dev/null 2>&1; then
@@ -253,6 +271,8 @@ if compgen -G "$HOME/bin/elysia*" >/dev/null; then
   ok "installed artifact present: $(ls -1 "$HOME/bin"/elysia* 2>/dev/null | wc -l) file(s)"
 else no "nothing installed in ~/bin (E2 manual release not yet run)"; fi
 UNITS=$(systemctl --user list-unit-files 'elysia*' --no-legend 2>/dev/null | wc -l)
+# @decision A1 — ruling `user`: a single binary under ~/bin run by a systemd
+# --user unit with linger, so "installed" means binary plus unit, not a package.
 if [ "$UNITS" -gt 0 ]; then ok "$UNITS elysia unit file(s) present (A1 user unit)"
 else no "no elysia systemd --user unit — a session reset kills the service (L09)"; fi
 
